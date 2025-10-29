@@ -20,19 +20,20 @@
       "bundleIdentifier": "com.tarini.app"
     },
     "android": {
+      "package": "com.tarini.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F2F2F2"
       },
-      "package": "com.tarini.app",
-      "versionCode": 1,
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router"
@@ -41,7 +42,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
         "projectId": "37eab4ed-2acc-4581-b7b9-f89779fbfa0d"
       }
