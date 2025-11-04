@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { Colors } from '../../constants/Colors';
+
+const MEDITATION_DURATION = 180; // 3 minutes in seconds
+const DAILY_GOAL = 5; // 5 sessions per day
 
 export default function MeditationScreen() {
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(180); // 3 minutes = 180 seconds
+  const [completedSessions, setCompletedSessions] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(MEDITATION_DURATION);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [scaleAnim] = useState(new Animated.Value(1));
   const rotationAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,7 +39,29 @@ export default function MeditationScreen() {
     },
   ];
 
-  // Animation effect
+  // Load completed sessions on mount
+  useEffect(() => {
+    loadProgress();
+  }, []);
+
+  // Timer countdown
+  useEffect(() => {
+    if (isTimerRunning && timeRemaining > 0) {
+      timerRef.current = setTimeout(() => {
+        setTimeRemaining(time => time - 1);
+      }, 1000);
+    } else if (timeRemaining === 0 && isTimerRunning) {
+      handleSessionComplete();
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, [isTimerRunning, timeRemaining]);
+
+  // Exercise animations
   useEffect(() => {
     if (selectedExercise === 'bee') {
       // Continuous rotation for the bee
@@ -68,59 +96,116 @@ export default function MeditationScreen() {
     };
   }, [selectedExercise]);
 
-  // Timer effect for 3-minute auto-stop
-  useEffect(() => {
-    if (selectedExercise) {
-      // Start the timer
-      timerRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            // Time's up! Auto-stop the exercise
-            stopExercise();
-            Alert.alert(
-              'Session Complete! 🎉',
-              'Great job! You completed a 3-minute meditation session.',
-              [{ text: 'OK' }]
-            );
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      // Reset timer when no exercise is selected
-      setTimeRemaining(180);
-    }
+  const loadProgress = async () => {
+    try {
+      const today = new Date().toDateString();
+      const savedDate = await SecureStore.getItemAsync('meditationDate');
+      const savedCount = await SecureStore.getItemAsync('meditationCount');
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      // Reset if it's a new day
+      if (savedDate !== today) {
+        await SecureStore.setItemAsync('meditationDate', today);
+        await SecureStore.setItemAsync('meditationCount', '0');
+        setCompletedSessions(0);
+      } else if (savedCount) {
+        setCompletedSessions(parseInt(savedCount));
       }
-    };
-  }, [selectedExercise]);
+    } catch (error) {
+      console.error('Error loading meditation progress:', error);
+    }
+  };
+
+  const saveProgress = async (count: number) => {
+    try {
+      await SecureStore.setItemAsync('meditationCount', count.toString());
+    } catch (error) {
+      console.error('Error saving meditation progress:', error);
+    }
+  };
+
+  const handleSessionComplete = () => {
+    setIsTimerRunning(false);
+    
+    // Increment completed sessions
+    const newCount = Math.min(completedSessions + 1, DAILY_GOAL);
+    setCompletedSessions(newCount);
+    saveProgress(newCount);
+
+    // Show completion message
+    if (newCount >= DAILY_GOAL) {
+      Alert.alert(
+        '🎉 Daily Goal Achieved!',
+        "Congratulations! You've completed all 5 meditation sessions today. Great work!",
+        [{ text: 'Awesome!', onPress: () => stopExercise() }]
+      );
+    } else {
+      Alert.alert(
+        '✅ Session Complete!',
+        `Great job! You've completed ${newCount} of ${DAILY_GOAL} sessions today.`,
+        [{ text: 'Continue', onPress: () => stopExercise() }]
+      );
+    }
+  };
 
   const startExercise = (exerciseId: string) => {
+    if (completedSessions >= DAILY_GOAL) {
+      Alert.alert(
+        'Daily Goal Reached',
+        "You've already completed your 5 meditation sessions today. Great work! Come back tomorrow for more.",
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setSelectedExercise(exerciseId);
-    setTimeRemaining(180); // Reset to 3 minutes
+    setTimeRemaining(MEDITATION_DURATION);
+    setIsTimerRunning(true);
   };
 
   const stopExercise = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
     setSelectedExercise(null);
-    setTimeRemaining(180);
+    setIsTimerRunning(false);
+    setTimeRemaining(MEDITATION_DURATION);
     scaleAnim.setValue(1);
     rotationAnim.setValue(0);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
   };
 
-  // Format time as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderProgressCircles = () => {
+    return (
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressTitle}>Today's Progress</Text>
+        <View style={styles.circlesContainer}>
+          {[...Array(DAILY_GOAL)].map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.progressCircle,
+                index < completedSessions && styles.progressCircleFilled,
+              ]}
+            >
+              <Text style={[
+                styles.circleNumber,
+                index < completedSessions && styles.circleNumberFilled
+              ]}>
+                {index < completedSessions ? '✓' : index + 1}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.progressText}>
+          {completedSessions} of {DAILY_GOAL} sessions completed
+        </Text>
+      </View>
+    );
   };
 
   if (selectedExercise) {
@@ -141,7 +226,7 @@ export default function MeditationScreen() {
           {/* Timer Display */}
           <View style={styles.timerContainer}>
             <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-            <Text style={styles.timerLabel}>Time Remaining</Text>
+            <Text style={styles.timerLabel}>remaining</Text>
           </View>
         </View>
 
@@ -211,14 +296,13 @@ export default function MeditationScreen() {
         <Text style={styles.subtitle}>Breathing Exercises</Text>
       </View>
 
+      {/* Progress Circles */}
+      {renderProgressCircles()}
+
       <View style={styles.content}>
         <Text style={styles.introText}>
-          Simple breathing exercises to help you relax and reduce stress. Choose an exercise below:
+          Simple breathing exercises to help you relax and reduce stress. Complete 5 sessions (3 minutes each) to reach your daily goal:
         </Text>
-        
-        <View style={styles.durationInfo}>
-          <Text style={styles.durationInfoText}>⏱️ Each session lasts 3 minutes</Text>
-        </View>
 
         {exercises.map((exercise) => (
           <TouchableOpacity
@@ -232,7 +316,7 @@ export default function MeditationScreen() {
             <View style={styles.exerciseInfo}>
               <Text style={styles.exerciseCardTitle}>{exercise.title}</Text>
               <Text style={styles.exerciseDescription}>{exercise.description}</Text>
-              <Text style={styles.exerciseDuration}>{exercise.duration}</Text>
+              <Text style={styles.exerciseDuration}>3 minutes • {exercise.duration}</Text>
             </View>
           </TouchableOpacity>
         ))}
@@ -241,8 +325,9 @@ export default function MeditationScreen() {
           <Text style={styles.tipsTitle}>💡 Tips for Breathing Exercises</Text>
           <Text style={styles.tipText}>• Find a quiet, comfortable place</Text>
           <Text style={styles.tipText}>• Sit or lie down in a relaxed position</Text>
+          <Text style={styles.tipText}>• Close your eyes if comfortable</Text>
           <Text style={styles.tipText}>• Focus on your breath</Text>
-          <Text style={styles.tipText}>• Practice for 2-5 minutes daily</Text>
+          <Text style={styles.tipText}>• Complete all 5 sessions daily for best results</Text>
         </View>
       </View>
     </ScrollView>
@@ -270,6 +355,54 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: Colors.text,
   },
+  progressContainer: {
+    backgroundColor: Colors.white,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 15,
+  },
+  circlesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 15,
+    marginBottom: 15,
+  },
+  progressCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3,
+    borderColor: Colors.tertiary,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressCircleFilled: {
+    backgroundColor: Colors.secondary,
+    borderColor: Colors.secondary,
+  },
+  circleNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  circleNumberFilled: {
+    color: Colors.white,
+    fontSize: 20,
+  },
+  progressText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '600',
+  },
   content: {
     paddingHorizontal: 20,
   },
@@ -277,20 +410,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     lineHeight: 20,
-    marginBottom: 15,
+    marginBottom: 25,
     textAlign: 'center',
-  },
-  durationInfo: {
-    backgroundColor: Colors.tertiary,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  durationInfoText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.secondary,
   },
   exerciseCard: {
     backgroundColor: Colors.white,
@@ -364,30 +485,24 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.text,
+    marginBottom: 15,
   },
   timerContainer: {
-    marginTop: 15,
     backgroundColor: Colors.white,
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: Colors.secondary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   timerText: {
-    fontSize: 36,
+    fontSize: 48,
     fontWeight: 'bold',
     color: Colors.secondary,
-    marginBottom: 5,
   },
   timerLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.text,
-    fontWeight: '600',
+    marginTop: 5,
   },
   animationContainer: {
     flex: 1,
