@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
 import { Colors } from '../../constants/Colors';
 
 export default function MeditationScreen() {
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(180); // 3 minutes = 180 seconds
   const [scaleAnim] = useState(new Animated.Value(1));
   const rotationAnim = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const exercises = [
     {
@@ -31,6 +33,7 @@ export default function MeditationScreen() {
     },
   ];
 
+  // Animation effect
   useEffect(() => {
     if (selectedExercise === 'bee') {
       // Continuous rotation for the bee
@@ -65,14 +68,59 @@ export default function MeditationScreen() {
     };
   }, [selectedExercise]);
 
+  // Timer effect for 3-minute auto-stop
+  useEffect(() => {
+    if (selectedExercise) {
+      // Start the timer
+      timerRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            // Time's up! Auto-stop the exercise
+            stopExercise();
+            Alert.alert(
+              'Session Complete! 🎉',
+              'Great job! You completed a 3-minute meditation session.',
+              [{ text: 'OK' }]
+            );
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      // Reset timer when no exercise is selected
+      setTimeRemaining(180);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [selectedExercise]);
+
   const startExercise = (exerciseId: string) => {
     setSelectedExercise(exerciseId);
+    setTimeRemaining(180); // Reset to 3 minutes
   };
 
   const stopExercise = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setSelectedExercise(null);
+    setTimeRemaining(180);
     scaleAnim.setValue(1);
     rotationAnim.setValue(0);
+  };
+
+  // Format time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (selectedExercise) {
@@ -89,6 +137,12 @@ export default function MeditationScreen() {
         <View style={styles.exerciseHeader}>
           <Text style={styles.title}>Tāriņī</Text>
           <Text style={styles.exerciseTitle}>{exercise?.title}</Text>
+          
+          {/* Timer Display */}
+          <View style={styles.timerContainer}>
+            <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+            <Text style={styles.timerLabel}>Time Remaining</Text>
+          </View>
         </View>
 
         <View style={styles.animationContainer}>
@@ -161,6 +215,10 @@ export default function MeditationScreen() {
         <Text style={styles.introText}>
           Simple breathing exercises to help you relax and reduce stress. Choose an exercise below:
         </Text>
+        
+        <View style={styles.durationInfo}>
+          <Text style={styles.durationInfoText}>⏱️ Each session lasts 3 minutes</Text>
+        </View>
 
         {exercises.map((exercise) => (
           <TouchableOpacity
@@ -183,7 +241,6 @@ export default function MeditationScreen() {
           <Text style={styles.tipsTitle}>💡 Tips for Breathing Exercises</Text>
           <Text style={styles.tipText}>• Find a quiet, comfortable place</Text>
           <Text style={styles.tipText}>• Sit or lie down in a relaxed position</Text>
-          <Text style={styles.tipText}>• Close your eyes if comfortable</Text>
           <Text style={styles.tipText}>• Focus on your breath</Text>
           <Text style={styles.tipText}>• Practice for 2-5 minutes daily</Text>
         </View>
@@ -220,8 +277,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     lineHeight: 20,
-    marginBottom: 25,
+    marginBottom: 15,
     textAlign: 'center',
+  },
+  durationInfo: {
+    backgroundColor: Colors.tertiary,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  durationInfoText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.secondary,
   },
   exerciseCard: {
     backgroundColor: Colors.white,
@@ -295,6 +364,30 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.text,
+  },
+  timerContainer: {
+    marginTop: 15,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: Colors.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  timerText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: Colors.secondary,
+    marginBottom: 5,
+  },
+  timerLabel: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '600',
   },
   animationContainer: {
     flex: 1,

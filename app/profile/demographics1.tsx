@@ -8,7 +8,11 @@ export default function Demographics1Screen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('demographic');
 
-  const handleSave = () => {
+  const handleNext = () => {
+    router.push('/profile/demographics2');
+  };
+
+  const handleSkip = () => {
     router.push('/profile/demographics2');
   };
 
@@ -16,6 +20,14 @@ export default function Demographics1Screen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Tāriņī</Text>
+      </View>
+
+      <View style={styles.optionalNotice}>
+        <Text style={styles.optionalTitle}>⚠️ OPTIONAL SECTION</Text>
+        <Text style={styles.optionalText}>
+          As these information are not considered in final version of the app, 
+          you do NOT have to fill these pages. This information is not needed, so you can skip if you prefer.
+        </Text>
       </View>
 
       <View style={styles.disclaimer}>
@@ -53,7 +65,12 @@ export default function Demographics1Screen() {
           </Text>
         </View>
 
-        <Button title="Next" onPress={handleSave} />
+        <Button title="Next" onPress={handleNext} />
+        
+        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+          <Text style={styles.skipButtonText}>Skip This Page →</Text>
+        </TouchableOpacity>
+        
         <View style={styles.spacer} />
       </ScrollView>
     </View>
@@ -74,6 +91,26 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: Colors.primary,
+  },
+  optionalNotice: {
+    backgroundColor: '#FFF3CD',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+    padding: 15,
+    marginHorizontal: 20,
+    marginBottom: 15,
+    borderRadius: 8,
+  },
+  optionalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  optionalText: {
+    fontSize: 13,
+    color: '#856404',
+    lineHeight: 18,
   },
   disclaimer: {
     backgroundColor: Colors.tertiary,
@@ -131,6 +168,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     textAlign: 'center',
+  },
+  skipButton: {
+    marginTop: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.secondary,
+    borderRadius: 8,
+    backgroundColor: Colors.white,
+  },
+  skipButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.secondary,
   },
   spacer: {
     height: 30,
